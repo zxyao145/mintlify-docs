@@ -1,0 +1,142 @@
+---
+title: "AGW 部署：Standalone、Docker 与 Control/Data Plane"
+sidebarTitle: "部署"
+description: "构建 AGW 的自包含 Server 压缩包、Docker 镜像与 Desktop 安装包，并按 Standalone 或拆分 Control/Data Plane 模式部署。"
+---
+
+本页面介绍 AGW 常用发布产物、构建命令以及 Standalone 与拆分 Control/Data Plane 两种部署模式。详细的镜像导入、Registry 发布、数据目录、反向代理与升级流程请参考仓库中的 [`docs/4.Deployment.md`](https://github.com/zxyao145/agw/blob/main/docs/4.Deployment.md)。
+
+## 发布产物
+
+- **Standalone Server 压缩包**：单进程运行所有模块，适合个人或小团队。
+- **Standalone Docker 镜像**：`ghcr.io/zxyao145/agw`。
+- **Control Plane 镜像**：`ghcr.io/zxyao145/agw-control-plane`，嵌入静态 Web UI。
+- **Data Plane 镜像**：`ghcr.io/zxyao145/agw-data-plane`，只暴露 Execution、A2A 与健康检查路由。
+- **Desktop 安装包**：Windows / macOS / Linux。
+
+## 构建 Server 与镜像
+
+本地 Server 和容器构建由仓库根目录下的 `publish.sh` 驱动。
+
+### 单个 runtime 的自包含 Server 压缩包
+
+```bash icon="terminal"
+PUBLISH_MODE=portable APP_VERSION=0.1.0 RIDS=linux-x64 ./publish.sh
+```
+
+### 单个平台的 Docker 镜像压缩包
+
+```bash icon="terminal"
+PUBLISH_MODE=docker \
+APP_VERSION=0.1.0 \
+IMAGE_NAME=agw:0.1.0 \
+DOCKER_PLATFORMS=linux/amd64 \
+./publish.sh
+```
+
+产物写入 `artifacts/publish/`。不设置 `RIDS` 或 `DOCKER_PLATFORMS` 时会构建默认平台矩阵；使用 `PUBLISH_MODE=all` 可同时构建可移植 Server 包与 Docker 镜像。
+
+## 构建 Desktop 安装包
+
+使用 **Node.js 24**，在 `src/clients` 下执行：
+
+```bash icon="terminal"
+pnpm release:desktop -- --flavor full --arch x64 --version 0.1.0
+pnpm release:desktop -- --flavor client --arch x64 --version 0.1.0
+```
+
+Desktop 产物输出到 `src/clients/desktop/release-artifacts/`。
+
+**支持的架构：** Windows x64、Linux x64、macOS x64 / arm64。
+
+### Flavor 说明
+
+<CardGroup cols={2}>
+  <Card title="full" icon="server">
+    包含 Desktop 与自包含 Server；Server 会安装为**当前用户级 daemon**。
+  </Card>
+  <Card title="client" icon="desktop">
+    仅包含 Desktop，需要连接已有的 Server。Windows 同时提供 Setup EXE 与 portable ZIP。
+  </Card>
+</CardGroup>
+
+### GitHub Release Asset 命名
+
+```text
+Agw-Desktop-{version}-{flavor}-{platform}-{arch}{variant}.{extension}
+```
+
+- `version`：不含开头 `v`
+- `platform`：`windows` / `macos` / `linux`
+- `arch`：`x64` / `arm64`
+- Windows 安装包用 `-Setup.exe`，便携版 Client 用 `-Portable.zip`；DMG 和 DEB 无 variant 后缀
+
+示例：
+
+```text
+Agw-Desktop-0.2.0-preview.1-full-windows-x64-Setup.exe
+Agw-Desktop-0.2.0-preview.1-client-windows-x64-Portable.zip
+Agw-Desktop-0.2.0-preview.1-client-macos-arm64.dmg
+```
+
+## 部署模式
+
+<Tabs>
+  <Tab title="Standalone">
+    - 单进程运行所有模块
+    - 默认 SQLite + InProcess 执行
+    - 适合个人或小团队自托管
+    - 可直接使用 `agw:{version}` 镜像
+  </Tab>
+  <Tab title="Control + Data Plane">
+    - 需要 PostgreSQL
+    - 执行模式为 Distributed
+    - **先初始化 Control Plane，再启动 Data Plane**
+    - Standalone 也可作为 Control Plane 使用
+  </Tab>
+</Tabs>
+
+## 数据目录
+
+- Server 状态默认保存在**当前用户**的 `agw` 目录下。
+- **日志**与 **Project Workspace** 使用独立位置。
+- 通过域名设置时，还需输入启动日志中的**一次性 Setup Code**。
+
+## 发布流程
+
+### Tag 与预发布
+
+正式稳定版通过 `vX.Y.Z` tag 发布：
+
+```bash icon="terminal"
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+预发布版本使用 `vX.Y.Z-preview.N`、`vX.Y.Z-alpha.N` 或 `vX.Y.Z-beta.N`。
+
+### 工作流
+
+- **[release.yml](https://github.com/zxyao145/agw/blob/main/.github/workflows/release.yml)**：为受支持的 tag 或手动传入的 `release_tag` 发布 Linux amd64/arm64 镜像，并创建包含全部 Desktop Assets 的 GitHub Release。
+- **[build-desktop.yml](https://github.com/zxyao145/agw/blob/main/.github/workflows/build-desktop.yml)**：在相关 PR、推送到 `main` 或手动运行时生成临时 Desktop 产物。
+
+同一个 Release 会发布 `linux/amd64` 与 `linux/arm64` 的 Standalone、Control Plane、Data Plane 镜像。
+
+## 发布前校验
+
+<Warning>
+在生成发布产物前，请先运行仓库校验命令，避免在发布流程中失败。
+</Warning>
+
+```bash icon="terminal"
+# 仓库根目录
+dotnet build Agw.slnx
+dotnet test Agw.slnx
+dotnet csharpier check .
+
+# src/clients
+pnpm build
+pnpm lint
+pnpm test
+pnpm fmt:check
+```

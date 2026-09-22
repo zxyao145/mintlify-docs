@@ -1,0 +1,108 @@
+---
+title: "Codex SDK 流式事件与 Item 类型详解"
+sidebarTitle: "流式事件"
+description: "掌握 Codex SDK 的 ThreadEvent 与 ThreadItem 类型体系，实时处理命令执行、文件变更、MCP 工具调用与 usage。"
+---
+
+Codex SDK 的实时能力通过 `Thread.RunStreamedAsync` 暴露，返回一个 `IAsyncEnumerable<ThreadEvent>`。每个事件对应 Codex CLI 的一条 JSONL 消息，事件与 item 类型都强类型化，可直接通过 `switch` 模式匹配处理。
+
+## 事件类型
+
+所有事件继承自 `ThreadEvent`：
+
+| 事件 | 说明 |
+| --- | --- |
+| `ThreadStartedEvent` | 携带可恢复的 thread ID。 |
+| `TurnStartedEvent` | 一次 prompt 开始处理时发出。 |
+| `TurnCompletedEvent` | 携带 token usage。 |
+| `TurnFailedEvent` | 携带 turn 级终止错误。 |
+| `ItemStartedEvent` | 某个 thread item 开始时发出。 |
+| `ItemUpdatedEvent` | thread item 发生变化时发出。 |
+| `ItemCompletedEvent` | item 达到终止状态时发出。 |
+| `ThreadErrorEvent` | 不可恢复的流错误。 |
+
+## Item 类型
+
+所有 item 继承自 `ThreadItem`：
+
+| Item | 说明 |
+| --- | --- |
+| `AgentMessageItem` | Agent 最终或中间文本消息。 |
+| `ReasoningItem` | Reasoning 摘要文本。 |
+| `CommandExecutionItem` | 命令、状态、输出与 exit code。 |
+| `FileChangeItem` | 文件 patch 与应用状态。 |
+| `McpToolCallItem` | MCP server、tool、参数、结果与错误。 |
+| `WebSearchItem` | Web 搜索的查询信息。 |
+| `TodoListItem` | Agent 任务列表状态。 |
+| `ErrorItem` | 非致命的 item 级错误。 |
+
+## 典型消费模式
+
+```csharp icon="code" lines
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+var thread = codex.StartThread();
+
+await foreach (var evt in thread.RunStreamedAsync("Refactor the Program.cs file."))
+{
+    switch (evt)
+    {
+        case ThreadStartedEvent started:
+            Console.WriteLine($"[thread] {started.ThreadId}");
+            break;
+
+        case ItemCompletedEvent { Item: AgentMessageItem msg }:
+            Console.WriteLine($"[agent] {msg.Text}");
+            break;
+
+        case ItemCompletedEvent { Item: CommandExecutionItem cmd }:
+            Console.WriteLine($"[cmd] {cmd.Command} exit={cmd.ExitCode}");
+            break;
+
+        case ItemCompletedEvent { Item: FileChangeItem change }:
+            Console.WriteLine($"[file] {change.Path} applied={change.Applied}");
+            break;
+
+        case ItemCompletedEvent { Item: McpToolCallItem mcp }:
+            Console.WriteLine($"[mcp] {mcp.Server}.{mcp.Tool}");
+            break;
+
+        case TurnCompletedEvent done:
+            Console.WriteLine($"[usage] in={done.Usage.InputTokens} out={done.Usage.OutputTokens}");
+            break;
+
+        case TurnFailedEvent failed:
+            Console.WriteLine($"[failed] {failed.Error}");
+            break;
+    }
+}
+```
+
+## Buffered vs. Streamed
+
+| 场景 | 推荐 API |
+| --- | --- |
+| 需要一次性返回 `FinalResponse` | `Thread.RunAsync` |
+| 需要 UI 实时展示 Agent 行为 | `Thread.RunStreamedAsync` |
+| 需要拦截命令执行做审计或额外提示 | `Thread.RunStreamedAsync` |
+| 需要根据文件变更即时刷新客户端视图 | `Thread.RunStreamedAsync` |
+
+<Note>
+`RunAsync` 会内部消费同一批 JSONL 事件。当收到 `TurnFailedEvent` 时会抛出 `InvalidOperationException`，最新的 `AgentMessageItem.Text` 会作为 `Turn.FinalResponse` 返回。
+</Note>
+
+## 取消与资源
+
+- 每个 turn 会启动一个 Codex CLI 子进程，发送 prompt 后关闭 stdin。
+- 传入 `TurnOptions.CancellationToken` 触发的取消会**终止子进程**。
+- SDK 会捕获 stderr，当 CLI 以非零码退出时把 stderr 内容包含在异常中。
+
+```csharp icon="code"
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+
+var turn = await thread.RunAsync(
+    "Perform a long-running refactor.",
+    new TurnOptions { CancellationToken = cts.Token });
+```

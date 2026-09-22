@@ -1,0 +1,110 @@
+---
+title: "AGW 配置：数据库、执行模式与可观测性"
+sidebarTitle: "配置"
+description: "配置 AGW 后端的数据库 Provider、执行模式、分布式锁、OpenTelemetry 与对话持久化间隔。"
+---
+
+AGW 后端主要配置位于 [`src/server/Agw.Host/appsettings.json`](https://github.com/zxyao145/agw/blob/main/src/server/Agw.Host/appsettings.json)。所有键都可以通过环境变量覆盖，例如 `Database__Provider=postgres`。本页面列出关键配置项与合法取值。
+
+## 完整示例
+
+下面是展开有效部署默认值后的样例。基础文件省略 Database、Execution 与锁的默认键，以保留旧状态文件的兜底。模板中为空的 OTLP endpoint 会回退到下例地址：
+
+```json appsettings.json icon="gear"
+{
+  "Database": {
+    "Provider": "sqlite",
+    "ConnectionString": "Data Source=agw.db"
+  },
+  "DistributedLock": {
+    "Provider": null,
+    "ConnectionString": ""
+  },
+  "Execution": {
+    "Provider": "InProcess",
+    "Distributed": {
+      "EventStream": {
+        "Provider": "Postgres"
+      }
+    }
+  },
+  "OpenTelemetry": {
+    "ServiceName": "Agw",
+    "ServiceVersion": "1.0.0",
+    "OtlpEndpoint": "http://localhost:4317"
+  }
+}
+```
+
+## Database
+
+| 键 | 合法取值 | 说明 |
+| --- | --- | --- |
+| `Database:Provider` | `sqlite`、`postgres` | 数据库供应商。 |
+| `Database:ConnectionString` | 连接串 | 依 Provider 而定，例如 `Data Source=agw.db`。 |
+
+<Note>
+Distributed 执行模式**要求 PostgreSQL**。SQLite 只能用于 Standalone + InProcess。
+</Note>
+
+## DistributedLock
+
+| 键 | 合法取值 | 说明 |
+| --- | --- | --- |
+| `DistributedLock:Provider` | `null`、`inmemory`、`postgres` | 分布式锁供应商。 |
+| `DistributedLock:ConnectionString` | 连接串 | 为空且 Provider 为 `postgres` 时复用 `Database:ConnectionString`。 |
+
+`Provider` 为 `null` 或不存在时的默认行为：
+
+- **SQLite** 使用进程内锁
+- **PostgreSQL** 使用 advisory lock
+
+## Execution
+
+| 键 | 合法取值 | 说明 |
+| --- | --- | --- |
+| `Execution:Provider` | `InProcess`、`Distributed` | 执行模式。 |
+| `Execution:Distributed:EventStream:Provider` | `Postgres`、`Redis` | 消息回放使用的存储。默认 PostgreSQL。 |
+
+<Warning>
+Distributed 执行要求**数据库与分布式锁都使用 PostgreSQL**。EventStream 可显式改用 Redis。
+</Warning>
+
+## OpenTelemetry
+
+| 键 | 说明 |
+| --- | --- |
+| `OpenTelemetry:ServiceName` | 服务名，写入 OTLP 遥测。 |
+| `OpenTelemetry:ServiceVersion` | 服务版本。 |
+| `OpenTelemetry:OtlpEndpoint` | OTLP endpoint，默认 `http://localhost:4317`。 |
+
+## 对话持久化
+
+Host 模板每 **10 秒** 刷新对话历史；省略该间隔时使用代码中的 **5 秒**兜底。详细行为见 [`docs/operations/conversation-persistence.md`](https://github.com/zxyao145/agw/blob/main/docs/operations/conversation-persistence.md)。
+
+## Setup 首次初始化
+
+- 首次运行会打开 `/setup` 创建管理员密码。
+- 无人值守部署可注入环境变量 `Setup__AdminPassword`。
+- 首次设置会**初始化当前配置的数据库**，并将管理员认证与初始化状态写入 `server-state.json`。
+- 通过域名访问设置时，需输入启动日志中的一次性 **Setup Code**。
+
+## 环境变量覆盖
+
+所有配置项都可以通过环境变量覆盖，`:` 用 `__` 替代：
+
+```bash icon="terminal"
+export Database__Provider=postgres
+export Database__ConnectionString="Host=db;Database=agw;Username=agw;Password=***"
+export Execution__Provider=Distributed
+export DistributedLock__Provider=postgres
+```
+
+<Warning>
+**请勿将机密信息写入固定配置文件**。建议优先使用环境变量或 secret 管理工具覆盖。
+</Warning>
+
+## 日志
+
+- Server 日志同时输出到**控制台**和 `AgwLogDir` 下按 Host 角色区分的文件。
+- 默认位置为进程工作目录下的 `./logs`，与 `AgwDataDir` 独立。

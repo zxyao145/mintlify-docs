@@ -1,0 +1,64 @@
+---
+title: "OpenAI Codex SDK for C#：在 .NET 中集成 Codex"
+sidebarTitle: "SDK 概览"
+description: "面向 .NET 10 的 OpenAI Codex SDK，提供 Buffered Turn、流式事件、可恢复 Thread、结构化输出与 Microsoft Agent Framework 集成。"
+---
+
+Codex SDK for C# 通过 [OpenAI Codex CLI](https://github.com/openai/codex) 让 .NET 应用与 Codex 交互。SDK 提供 buffered turn、实时 JSONL 事件流、可恢复的 Codex thread、结构化 JSON Schema 输出、本地图片输入，以及与 Microsoft Agent Framework 的集成。AGW 内部通过该 SDK 接入 Codex Agent。
+
+<Info>
+本组文档来自 [zxyao145/codex-sdk-csharp](https://github.com/zxyao145/codex-sdk-csharp)，可以脱离 AGW 单独使用。
+</Info>
+
+## 主要特性
+
+<CardGroup cols={2}>
+  <Card title="Buffered Turn" icon="bolt" href="/sdks/codex/quickstart">
+    通过 `Thread.RunAsync` 获取完整的一次响应结果。
+  </Card>
+  <Card title="流式事件" icon="wave-square" href="/sdks/codex/streaming">
+    通过 `Thread.RunStreamedAsync` 实时接收 JSONL 事件。
+  </Card>
+  <Card title="Thread 恢复" icon="clock-rotate-left" href="/sdks/codex/threads">
+    使用 `StartThread` 与 `ResumeThread` 支持跨进程会话。
+  </Card>
+  <Card title="MAF 集成" icon="puzzle-piece" href="/sdks/codex/maf">
+    通过 `CodexSdk.MAF` 将 Codex 作为 `AIAgent` 使用。
+  </Card>
+</CardGroup>
+
+## 快速导航
+
+<CardGroup cols={2}>
+  <Card title="快速开始" icon="rocket" href="/sdks/codex/quickstart">
+    完成 CLI 与包安装，跑通第一个 Buffered Turn。
+  </Card>
+  <Card title="结构化输出" icon="brackets-curly" href="/sdks/codex/structured-output">
+    使用 JSON Schema 强制 Codex 返回结构化结果。
+  </Card>
+  <Card title="配置" icon="sliders" href="/sdks/codex/configuration">
+    `CodexOptions`、`ThreadOptions`、`TurnOptions`。
+  </Card>
+  <Card title="故障排查" icon="wrench" href="/sdks/codex/troubleshooting">
+    codex 未找到、认证错误、Git repo 检查、沙箱与审批。
+  </Card>
+</CardGroup>
+
+## 提供的 NuGet 包
+
+| 包 | 用途 |
+| --- | --- |
+| [`CodexSdk`](https://www.nuget.org/packages/CodexSdk/) | 核心 SDK：进程桥、事件模型、Buffered Turn 与流式 API。 |
+| [`CodexSdk.MAF`](https://www.nuget.org/packages/CodexSdk.MAF/) | Microsoft Agent Framework 集成，将 Codex 暴露为 `AIAgent`。 |
+
+## 支持能力概览
+
+- Buffered turn via `Thread.RunAsync`
+- 实时 JSONL 事件流 via `Thread.RunStreamedAsync`
+- 可恢复的 Codex thread：`StartThread` / `ResumeThread`
+- 强类型事件与 item 模型：Agent 消息、命令执行、文件变更、MCP 工具调用、Web 搜索、Reasoning、Todo list
+- 通过 `TurnOptions.OutputSchema` 提供结构化输出
+- 通过 `Input.FromParts`、`TextInput`、`LocalImageInput` 提供本地图片输入
+- Codex CLI 配置：模型、上下文窗口、自动压缩阈值、Sandbox、审批策略、Reasoning effort、Web 搜索、附加目录、Base URL、API key、环境变量
+- 通过 `CodexSdk.MAF` 集成 Microsoft Agent Framework
+- 面向 `.NET 10.0`，启用 nullable reference types 与 implicit usings

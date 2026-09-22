@@ -1,0 +1,56 @@
+---
+title: "Claude Code SDK for C#：将 Claude 集成到 .NET 应用"
+sidebarTitle: "SDK 概览"
+description: "面向 .NET 10.0 的 Claude Code SDK，提供一次性查询、交互式客户端和完整的 Microsoft Agent Framework 集成。"
+---
+
+Claude Code SDK for C# 通过 Claude Code CLI 让 .NET 应用直接调用 Claude 模型。它同时支持一次性查询、长连接的交互式会话，以及作为 `AIAgent` 接入 Microsoft Agent Framework（MAF）。AGW 内部使用该 SDK 来接入 Claude Code Agent。
+
+<Info>
+本组文档来自 [zxyao145/claude-code-sdk-csharp](https://github.com/zxyao145/claude-code-sdk-csharp)，可独立于 AGW 单独使用。
+</Info>
+
+## 主要特性
+
+<CardGroup cols={2}>
+  <Card title="一次性查询" icon="bolt" href="/sdks/claude-code/core-sdk/one-shot-queries">
+    通过 `ClaudeQuery.QueryAsync` 发起简单的请求／响应调用。
+  </Card>
+  <Card title="交互式客户端" icon="comments" href="/sdks/claude-code/core-sdk/interactive-client">
+    使用 `ClaudeSdkClient` 建立双向的多轮会话。
+  </Card>
+  <Card title="流式响应" icon="wave-square" href="/sdks/claude-code/maf/streaming">
+    通过 `IAsyncEnumerable<T>` 获取实时的 token 级增量。
+  </Card>
+  <Card title="Microsoft Agent Framework" icon="puzzle-piece" href="/sdks/claude-code/maf/overview">
+    将 Claude 作为 `AIAgent` 使用，支持会话、序列化和工具调用。
+  </Card>
+</CardGroup>
+
+## 快速导航
+
+<CardGroup cols={2}>
+  <Card title="快速开始" icon="rocket" href="/sdks/claude-code/quickstart">
+    几分钟内完成第一次 Claude 调用。
+  </Card>
+  <Card title="安装" icon="download" href="/sdks/claude-code/installation">
+    安装 NuGet 包和 Claude Code CLI 前置依赖。
+  </Card>
+  <Card title="配置选项" icon="sliders" href="/sdks/claude-code/configuration/options">
+    模型、系统提示、思考 token 及工具权限设置。
+  </Card>
+  <Card title="架构" icon="diagram-project" href="/sdks/claude-code/reference/architecture">
+    了解 `ClaudeProcess`、`ClaudeQuery` 与 `ClaudeSdkClient` 的关系。
+  </Card>
+</CardGroup>
+
+## 提供的 NuGet 包
+
+| 包 | 用途 |
+| --- | --- |
+| [`ClaudeCodeSdk`](https://www.nuget.org/packages/ClaudeCodeSdk/) | 核心 SDK，提供进程管理、消息协议、一次性与交互式 API。 |
+| [`ClaudeCodeSdk.MAF`](https://www.nuget.org/packages/ClaudeCodeSdk.MAF/) | Microsoft Agent Framework 集成，将 Claude 暴露为 `AIAgent`。 |
+
+<Note>
+本 SDK 面向 `net10.0`，运行时需要在 `PATH` 中提供 [Claude Code CLI](https://github.com/anthropics/claude-code)。
+</Note>

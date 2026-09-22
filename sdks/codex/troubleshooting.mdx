@@ -1,0 +1,126 @@
+---
+title: "Codex SDK 常见问题与故障排查"
+sidebarTitle: "故障排查"
+description: "解决 Codex SDK 常见问题：codex 未找到、Node.js 缺失、认证错误、Git repo 检查以及 Sandbox 与审批策略。"
+---
+
+本页面汇总 Codex SDK for C# 常见的运行时报错与解决方式。除了下面的场景以外，也可以在 [zxyao145/codex-sdk-csharp/issues](https://github.com/zxyao145/codex-sdk-csharp/issues) 提交问题。
+
+## codex not found
+
+**原因：** SDK 无法在 `PATH` 中找到 `codex` 可执行文件。
+
+**解决方式：**
+
+```bash icon="terminal"
+npm install -g @openai/codex
+```
+
+如果 CLI 安装在自定义路径，通过 `CodexOptions.CodexPathOverride` 显式传入：
+
+```csharp icon="code"
+var codex = new Codex(new CodexOptions
+{
+    CodexPathOverride = "/path/to/codex",
+});
+```
+
+## Node.js 缺失
+
+Codex CLI 通过 npm 安装，需要 Node.js。若系统未安装：
+
+1. 从 [nodejs.org](https://nodejs.org/) 安装 Node.js。
+2. 再执行 `npm install -g @openai/codex`。
+
+## 认证错误
+
+**原因：** 缺少 API key，或 key 无权访问所选模型。
+
+**解决方式：** 在环境中设置 `CODEX_API_KEY`：
+
+<CodeGroup>
+
+```bash macOS/Linux
+export CODEX_API_KEY="your-api-key"
+```
+
+```powershell Windows PowerShell
+$env:CODEX_API_KEY="your-api-key"
+```
+
+```cmd Windows CMD
+set CODEX_API_KEY=your-api-key
+```
+
+</CodeGroup>
+
+或者在代码中通过 `CodexOptions.ApiKey` 传入：
+
+```csharp icon="code"
+var codex = new Codex(new CodexOptions
+{
+    ApiKey = "your-api-key",
+});
+```
+
+## Git 仓库检查
+
+**原因：** Codex 默认要求当前工作目录是 Git 仓库。
+
+**解决方式：** 若确实要在 Git 仓库外运行：
+
+```csharp icon="code"
+var thread = codex.StartThread(new ThreadOptions
+{
+    SkipGitRepoCheck = true,
+});
+```
+
+## Sandbox 与审批策略
+
+**原因：** 默认 sandbox 或审批策略过严，阻止了必要的写入或网络访问。
+
+**解决方式：** 按需调整 `ThreadOptions`：
+
+```csharp icon="code"
+var thread = codex.StartThread(new ThreadOptions
+{
+    SandboxMode = SandboxMode.WorkspaceWrite,
+    ApprovalPolicy = ApprovalMode.OnRequest,
+    NetworkAccessEnabled = true,
+});
+```
+
+<Warning>
+放宽 sandbox 与审批意味着 Codex 可以对本地文件系统与网络产生更大影响。请在可信环境或有版本控制的目录下使用。
+</Warning>
+
+## CLI 非零退出
+
+**现象：** `RunAsync` 抛出异常，异常消息中包含 CLI stderr。
+
+**原因：** Codex CLI 本身以非零码退出。可能的原因：
+
+- 模型不可用或不受支持
+- 认证失败
+- Sandbox 阻止了必需的操作
+- 网络请求被禁用但 CLI 需要访问
+
+**排查：** 查看异常中的 stderr 输出，通常包含 CLI 报错细节；必要时在同一目录手动执行 `codex exec --experimental-json` 对比。
+
+## 更多资源
+
+<CardGroup cols={2}>
+  <Card title="OpenAI Codex CLI" icon="github" href="https://github.com/openai/codex">
+    上游 CLI 项目与已知问题。
+  </Card>
+  <Card title="OpenAI Platform Docs" icon="book" href="https://platform.openai.com/docs">
+    模型能力、Rate limit 与 API 参考。
+  </Card>
+  <Card title="Microsoft Agent Framework" icon="microsoft" href="https://learn.microsoft.com/en-us/dotnet/ai/">
+    与 MAF 集成的官方参考。
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/zxyao145/codex-sdk-csharp/issues">
+    在 SDK 仓库提交问题或查看已知情况。
+  </Card>
+</CardGroup>

@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Claude Code SDK for C#",
+  "name": "AGW",
   "colors": {
     "primary": "#D97757",
     "light": "#E89A7C",
@@ -9,46 +9,108 @@
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "开始使用",
-        "pages": [
-          "index",
-          "quickstart",
-          "installation"
+        "tab": "AGW",
+        "groups": [
+          {
+            "group": "开始使用",
+            "pages": [
+              "index",
+              "quickstart",
+              "use-cases"
+            ]
+          },
+          {
+            "group": "核心概念",
+            "pages": [
+              "workspaces",
+              "architecture"
+            ]
+          },
+          {
+            "group": "运维",
+            "pages": [
+              "configuration",
+              "deployment",
+              "development"
+            ]
+          }
         ]
       },
       {
-        "group": "核心 SDK",
-        "pages": [
-          "core-sdk/overview",
-          "core-sdk/one-shot-queries",
-          "core-sdk/interactive-client",
-          "core-sdk/message-types"
+        "tab": "Claude Code SDK",
+        "groups": [
+          {
+            "group": "开始使用",
+            "pages": [
+              "sdks/claude-code/overview",
+              "sdks/claude-code/quickstart",
+              "sdks/claude-code/installation"
+            ]
+          },
+          {
+            "group": "核心 SDK",
+            "pages": [
+              "sdks/claude-code/core-sdk/overview",
+              "sdks/claude-code/core-sdk/one-shot-queries",
+              "sdks/claude-code/core-sdk/interactive-client",
+              "sdks/claude-code/core-sdk/message-types"
+            ]
+          },
+          {
+            "group": "MAF 集成",
+            "pages": [
+              "sdks/claude-code/maf/overview",
+              "sdks/claude-code/maf/sessions",
+              "sdks/claude-code/maf/streaming",
+              "sdks/claude-code/maf/chat-history"
+            ]
+          },
+          {
+            "group": "配置",
+            "pages": [
+              "sdks/claude-code/configuration/options",
+              "sdks/claude-code/configuration/permissions",
+              "sdks/claude-code/configuration/environment"
+            ]
+          },
+          {
+            "group": "参考",
+            "pages": [
+              "sdks/claude-code/reference/architecture",
+              "sdks/claude-code/reference/troubleshooting"
+            ]
+          }
         ]
       },
       {
-        "group": "MAF 集成",
-        "pages": [
-          "maf-sdks/overview",
-          "maf-sdks/sessions",
-          "maf-sdks/streaming",
-          "maf-sdks/chat-history"
-        ]
-      },
-      {
-        "group": "配置",
-        "pages": [
-          "configuration/options",
-          "configuration/permissions",
-          "configuration/environment"
-        ]
-      },
-      {
-        "group": "参考",
-        "pages": [
-          "reference/architecture",
-          "reference/troubleshooting"
+        "tab": "Codex SDK",
+        "groups": [
+          {
+            "group": "开始使用",
+            "pages": [
+              "sdks/codex/overview",
+              "sdks/codex/quickstart"
+            ]
+          },
+          {
+            "group": "使用指南",
+            "pages": [
+              "sdks/codex/streaming",
+              "sdks/codex/threads",
+              "sdks/codex/structured-output",
+              "sdks/codex/maf"
+            ]
+          },
+          {
+            "group": "参考",
+            "pages": [
+              "sdks/codex/configuration",
+              "sdks/codex/architecture",
+              "sdks/codex/troubleshooting"
+            ]
+          }
         ]
       }
     ]
@@ -56,14 +118,14 @@
   "navbar": {
     "links": [
       {
-        "href": "https://github.com/zxyao145/claude-code-sdk-csharp",
+        "href": "https://github.com/zxyao145/agw",
         "label": "GitHub"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "NuGet",
-      "href": "https://www.nuget.org/packages/ClaudeCodeSdk/"
+      "label": "下载",
+      "href": "https://github.com/zxyao145/agw/releases"
     }
   },
   "contextual": {
@@ -76,7 +138,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/zxyao145/claude-code-sdk-csharp"
+      "github": "https://github.com/zxyao145/agw"
     }
   }
 }

@@ -1,0 +1,80 @@
+---
+title: "Codex SDK 架构：进程桥与 JSONL 事件流"
+sidebarTitle: "架构"
+description: "了解 Codex SDK 的 Codex、Thread 与 CodexExec 组件如何组合，通过 codex exec --experimental-json 桥接 CLI。"
+---
+
+Codex SDK 采用**轻量进程桥**方式在 `codex exec --experimental-json` 之上工作，把 JSONL 事件流映射为 .NET 类型。SDK 不复制模型逻辑，也不假设 CLI 行为，因此 CLI 的能力升级基本上可以无痛透传。
+
+## 核心组件
+
+<CardGroup cols={3}>
+  <Card title="Codex" icon="cube">
+    SDK 主入口。
+  </Card>
+  <Card title="Thread" icon="comments">
+    单个会话与 turn 的 API。
+  </Card>
+  <Card title="CodexExec" icon="terminal">
+    Codex CLI 子进程桥。
+  </Card>
+</CardGroup>
+
+### Codex
+
+- 通过 `StartThread` 创建新 Thread
+- 通过 `ResumeThread` 恢复已有 Thread
+- 持有全局的 `CodexOptions`
+- 在多个 Thread 之间复用同一份 Codex CLI 执行桥
+
+### Thread
+
+- 通过 `RunAsync` 运行 buffered prompt
+- 通过 `RunStreamedAsync` 输出事件流
+- 在收到 `thread.started` 事件后存储当前 thread ID
+- 支持文字、本地图片输入，以及每个 turn 的结构化输出
+
+### CodexExec
+
+- 从 `CodexOptions.CodexPathOverride` 或 `PATH` 解析 `codex` 可执行文件
+- 启动 `codex exec --experimental-json`
+- 通过 stdin 发送 prompt
+- 通过异步流 yield stdout 的 JSONL 行
+- 应用 CLI 参数、config override 与环境变量
+
+## 关键行为
+
+### 消息流与终止
+
+- `RunStreamedAsync` 逐条 yield 解析后的 Codex JSONL 事件。
+- `RunAsync` 缓存已完成的 item，返回一个 `Turn`。
+- `RunAsync` 会把最新 `AgentMessageItem.Text` 存为 `Turn.FinalResponse`。
+- 收到 `TurnFailedEvent` 时，`RunAsync` 抛出 `InvalidOperationException`。
+
+### Thread 恢复
+
+- `Thread.Id` 由 `ThreadStartedEvent` 填充。
+- `Codex.ResumeThread(id)` 恢复 Codex CLI 侧持久化的 thread。
+- MAF 集成中，`CodexAgentSession` 会序列化 Codex thread ID。
+
+### JSON 序列化
+
+- 多态事件与 item 模型使用 CLI 输出的 `type` 字段作为鉴别符。
+- 枚举值从 snake_case JSON 名称解析。
+- 结构化输出 schema 会被写入临时 JSON 文件并作为 `codex exec --output-schema` 参数传入。
+
+### 资源管理
+
+- 每个 turn 启动一个 Codex CLI 子进程，发送 prompt 后关闭 stdin。
+- Cancellation token 会终止对应的子进程。
+- SDK 捕获 stderr，CLI 以非零码退出时在异常里包含 stderr。
+
+## MAF 集成
+
+`CodexSdk.MAF` 在 `Microsoft.Agents.AI` 之上封装了：
+
+- `CodexAIAgent`：实现 `AIAgent`，支持 buffered/streaming。
+- `CodexAgentSession`：存储 `ThreadId`，序列化与反序列化 session 状态。
+- `CodexAIAgentOptions`：核心与 thread 选项、显式 ThreadId、`IsResume`、`ChatHistoryProvider`。
+
+详见 [MAF 集成](/sdks/codex/maf)。

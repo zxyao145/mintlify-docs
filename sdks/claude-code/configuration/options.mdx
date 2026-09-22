@@ -42,7 +42,7 @@ var options = new ClaudeCodeOptions
 | `MaxThinkingTokens` | 扩展思考的最大 token 预算（默认 8000）。 |
 | `IncludePartialMessages` | 是否发送原始 `StreamEvent` 增量。 |
 | `PermissionMode` | 工具权限模式：`@default`、`acceptEdits`、`plan`、`bypassPermissions`。 |
-| `CanUseTool` | 处理权限请求与 `AskUserQuestion` 的异步回调，详见 [工具权限](/configuration/permissions)。 |
+| `CanUseTool` | 处理权限请求与 `AskUserQuestion` 的异步回调，详见 [工具权限](/sdks/claude-code/configuration/permissions)。 |
 | `AllowedTools` | 允许使用的工具列表。 |
 | `DisallowedTools` | 禁止使用的工具列表。 |
 | `McpServers` | MCP 服务器配置。 |
@@ -58,7 +58,7 @@ var options = new ClaudeCodeOptions
 
 | 属性 | 说明 |
 | --- | --- |
-| `ChatHistoryProvider` | 自定义历史持久化 hook；参见 [对话历史](/maf-sdks/chat-history)。 |
+| `ChatHistoryProvider` | 自定义历史持久化 hook；参见 [对话历史](/sdks/claude-code/maf/chat-history)。 |
 
 ## 传入选项
 

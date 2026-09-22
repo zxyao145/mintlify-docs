@@ -1,0 +1,80 @@
+---
+title: "Codex Thread 与会话恢复"
+sidebarTitle: "Thread 恢复"
+description: "掌握 Codex SDK Thread 的 ID 生命周期、跨进程恢复、本地图片输入与后续 turn 的组合使用。"
+---
+
+Codex Thread 是一次会话的载体。SDK 会记录 `thread.Id`，之后可通过 `Codex.ResumeThread` 让另一个进程或后续调用继续同一 thread。本页面覆盖 Thread 的生命周期、ID 使用方式，以及带本地图片输入的 turn 组合。
+
+## Thread 生命周期
+
+1. 调用 `codex.StartThread()` 创建 Thread。此时 `Thread.Id` 尚未填充。
+2. 调用 `RunAsync` 或 `RunStreamedAsync`，Codex CLI 发出 `ThreadStartedEvent` 后 `Thread.Id` 被填充。
+3. 之后的 turn 会继续在同一 thread 中执行。
+4. 保存 `Thread.Id`，用 `Codex.ResumeThread(id)` 可以在其他进程或请求中恢复该 thread。
+
+```csharp icon="code"
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+var thread = codex.StartThread();
+
+await thread.RunAsync("Give me a project summary.");
+
+var savedThreadId = thread.Id
+    ?? throw new InvalidOperationException("Thread ID was not set.");
+
+// 在另一个进程里
+var resumed = codex.ResumeThread(savedThreadId);
+var followUp = await resumed.RunAsync("Continue the analysis from where we left off.");
+
+Console.WriteLine(followUp.FinalResponse);
+```
+
+<Tip>
+在 MAF 集成中，`CodexAgentSession` 会自动序列化和反序列化 `ThreadId`，无需手动管理。详见 [MAF 集成](/sdks/codex/maf)。
+</Tip>
+
+## 本地图片输入
+
+`Input.FromParts` 结合 `TextInput` 与 `LocalImageInput` 可以在一个 turn 中传入文字与本地图片：
+
+```csharp icon="code"
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+
+var thread = codex.StartThread(new ThreadOptions
+{
+    SandboxMode = SandboxMode.ReadOnly,
+});
+
+var turn = await thread.RunAsync(Input.FromParts(
+[
+    new TextInput("Describe what you see in these screenshots."),
+    new LocalImageInput("./ui.png"),
+    new LocalImageInput("./diagram.jpg"),
+]));
+
+Console.WriteLine(turn.FinalResponse);
+```
+
+## Turn 终止行为
+
+- `RunAsync` 会把最新的 `AgentMessageItem.Text` 存为 `Turn.FinalResponse`。
+- 如果收到 `TurnFailedEvent`，`RunAsync` 会抛出 `InvalidOperationException`。
+- 每个 turn 使用独立的 Codex CLI 子进程，发送完 prompt 后关闭 stdin。
+
+## Thread 与 CLI 状态
+
+- Thread 状态由 **Codex CLI 本身持久化**。
+- `Codex.ResumeThread(id)` 恢复的是 CLI 侧的 thread。
+- 只要 CLI 状态仍存在，跨进程恢复即可正常工作。
+
+## JSON 序列化说明
+
+- 多态事件与 item 模型使用 CLI 返回的 `type` 字段作为鉴别符。
+- 枚举值从 snake_case JSON 名称解析。
+- 结构化输出 schema 会被写入临时 JSON 文件并作为 `codex exec --output-schema` 参数传入。

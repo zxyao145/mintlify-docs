@@ -1,0 +1,113 @@
+---
+title: "Codex 与 Microsoft Agent Framework 集成"
+sidebarTitle: "MAF 集成"
+description: "使用 CodexSdk.MAF 将 Codex 作为 AIAgent 使用，包含 CodexAIAgent、CodexAgentSession 与 CodexAIAgentOptions。"
+---
+
+`CodexSdk.MAF` 在 `Microsoft.Agents.AI` 之上封装一个由 Codex thread 支撑的桥接层。可以让基于 MAF 的应用直接把 Codex 作为 `AIAgent` 使用，同时保留会话持久化与流式增量能力。AGW 内部通过该集成来运行 Codex Agent。
+
+## CodexAIAgent
+
+`CodexAIAgent` 实现 `AIAgent`，支持 buffered 与流式两种运行模式：
+
+- Buffered：`RunAsync`
+- 流式：`RunStreamingAsync`
+- 将 Codex usage 转换为 MAF 的 `UsageDetails`
+- 配置 `ChatHistoryProvider` 时会用它管理历史
+- 图片 `DataContent` 输入会在每个 turn 期间转成临时本地图片参数
+- Assistant 响应会映射为 `ChatMessage` 与 `AgentResponseUpdate`
+
+```csharp icon="code"
+using Microsoft.Agents.AI;
+using OpenAI.CodexSdk.MAF;
+
+var agent = new CodexAIAgent();
+var session = await agent.CreateSessionAsync();
+
+var response = await agent.RunAsync(
+    "Explain what this project does in one paragraph.",
+    session);
+
+Console.WriteLine(response.Text);
+
+await foreach (var update in agent.RunStreamingAsync(
+    "List the files in the samples directory.",
+    session))
+{
+    if (!string.IsNullOrWhiteSpace(update.Text))
+    {
+        Console.Write(update.Text);
+    }
+}
+```
+
+## CodexAgentSession
+
+`CodexAgentSession` 负责：
+
+- 存储 Codex `ThreadId`
+- 序列化与反序列化 session 状态
+- 让会话在进程或请求之间保持连续
+
+<Tip>
+把序列化后的 session 存到你自己的存储中（例如数据库、Redis 或文件系统），下次可直接反序列化恢复对话。
+</Tip>
+
+## CodexAIAgentOptions
+
+用于配置 `CodexAIAgent` 的构造参数：
+
+| 属性 | 说明 |
+| --- | --- |
+| `CodexOptions` | 核心 `CodexOptions`，控制 CLI 路径、API key、Config、Env 等。 |
+| `ThreadOptions` | 每个 thread 的选项，例如 `Model`、`SandboxMode`、`WorkingDirectory` 等。 |
+| `ThreadId` | 显式指定 thread ID。 |
+| `IsResume` | 使用 options 指定的 thread ID 恢复已有 Codex thread。 |
+| `ChatHistoryProvider` | 可选的历史 provider。 |
+
+## 组合示例
+
+```csharp icon="code" lines
+using Microsoft.Agents.AI;
+using OpenAI.CodexSdk;
+using OpenAI.CodexSdk.MAF;
+
+var options = new CodexAIAgentOptions
+{
+    CodexOptions = new CodexOptions
+    {
+        ApiKey = Environment.GetEnvironmentVariable("CODEX_API_KEY"),
+    },
+    ThreadOptions = new ThreadOptions
+    {
+        Model = "gpt-5.6-sol",
+        SandboxMode = SandboxMode.WorkspaceWrite,
+        WorkingDirectory = "/path/to/project",
+        ApprovalPolicy = ApprovalMode.OnRequest,
+        NetworkAccessEnabled = true,
+    },
+};
+
+var agent = new CodexAIAgent(options);
+var session = await agent.CreateSessionAsync();
+
+var response = await agent.RunAsync("Analyze the repository structure.", session);
+Console.WriteLine(response.Text);
+
+// 序列化 session
+var serialized = session.Serialize();
+
+// 之后恢复
+var restored = CodexAgentSession.Deserialize(serialized);
+```
+
+## 与非 MAF 场景的区别
+
+<CardGroup cols={2}>
+  <Card title="Core SDK" icon="cube" href="/sdks/codex/overview">
+    直接使用 `Codex` + `Thread`，适合命令行、脚本、自定义 Agent 框架。
+  </Card>
+  <Card title="MAF 集成" icon="puzzle-piece">
+    自动接入 MAF 的 `AIAgent` 抽象、消息模型与 usage 记录。
+  </Card>
+</CardGroup>

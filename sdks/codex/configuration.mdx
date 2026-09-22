@@ -1,0 +1,139 @@
+---
+title: "Codex SDK 配置：CodexOptions、ThreadOptions 与 TurnOptions"
+sidebarTitle: "配置"
+description: "配置 Codex SDK 的全局客户端选项、Thread 级 CLI 参数与每次 Turn 的 schema、取消行为与环境变量。"
+---
+
+Codex SDK 的配置分成三层：全局 `CodexOptions`、每个 Thread 的 `ThreadOptions`，以及每个 Turn 的 `TurnOptions`。本页面列出每一层的关键字段与推荐用法。
+
+## 环境变量
+
+SDK 会将环境变量转发给 Codex CLI 子进程。
+
+| 变量 | 用途 |
+| --- | --- |
+| `CODEX_API_KEY` | 供 CLI 使用的 API key；`CodexOptions.ApiKey` 提供时会由 SDK 设置。 |
+| `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | SDK 设置的标识，用于区分来自 C# SDK 的 CLI 调用。 |
+
+<Note>
+当提供了 `CodexOptions.Env` 时，SDK 会使用该字典作为进程环境。未提供时会继承当前进程环境。
+</Note>
+
+## CodexOptions
+
+`Codex` 客户端级别的全局选项：
+
+```csharp icon="code" lines
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient(new CodexOptions
+{
+    CodexPathOverride = "/path/to/codex",
+    BaseUrl = "https://api.openai.com/v1",
+    ApiKey = "sk-...",
+    Config = new Dictionary<string, CodexConfigValue>
+    {
+        ["model_provider"] = "openai",
+        ["approval_policy"] = "on-request",
+    },
+    Env = new Dictionary<string, string>
+    {
+        ["CODEX_API_KEY"] = "sk-...",
+    },
+});
+```
+
+| 属性 | 说明 |
+| --- | --- |
+| `CodexPathOverride` | 手动指定 `codex` 可执行文件路径；未设置时从 `PATH` 解析。 |
+| `BaseUrl` | 覆盖 OpenAI Base URL。 |
+| `ApiKey` | 会作为 `CODEX_API_KEY` 传给 CLI。 |
+| `Config` | 键值形式的 Codex CLI config override。 |
+| `Env` | 传给 CLI 子进程的环境变量字典。 |
+
+## ThreadOptions
+
+每个 thread 转发给 `codex exec` 的选项：
+
+```csharp icon="code" lines
+var thread = codex.StartThread(new ThreadOptions
+{
+    Model = "gpt-5.6-sol",
+    SandboxMode = SandboxMode.WorkspaceWrite,
+    WorkingDirectory = "/path/to/project",
+    SkipGitRepoCheck = true,
+    ModelReasoningEffort = ModelReasoningEffort.High,
+    ModelContextWindow = 1_000_000,
+    ModelAutoCompactTokenLimit = 900_000,
+    NetworkAccessEnabled = true,
+    WebSearchMode = WebSearchMode.Live,
+    ApprovalPolicy = ApprovalMode.OnRequest,
+    AdditionalDirectories = ["/path/to/shared/context"],
+});
+```
+
+| 属性 | 说明 |
+| --- | --- |
+| `Model` | 模型名。 |
+| `SandboxMode` | `ReadOnly`、`WorkspaceWrite` 等。 |
+| `WorkingDirectory` | CLI 的工作目录。 |
+| `SkipGitRepoCheck` | 在 Git 仓库外运行时启用。 |
+| `ModelReasoningEffort` | Reasoning effort 等级。 |
+| `ModelContextWindow` | 覆盖上下文窗口大小。 |
+| `ModelAutoCompactTokenLimit` | 自动压缩触发的 token 上限。 |
+| `NetworkAccessEnabled` | 是否允许 CLI 访问网络。 |
+| `WebSearchMode` | Web 搜索模式。 |
+| `ApprovalPolicy` | 审批策略：`Never`、`OnRequest`、`OnFailure`、`OnDanger` 等。 |
+| `AdditionalDirectories` | Codex 可访问的额外目录。 |
+
+<Warning>
+`ModelContextWindow` 与 `ModelAutoCompactTokenLimit` 只有在大于零时才转发；null、0 与负数会被忽略。Codex CLI 可能根据模型的实际能力再做限制。
+</Warning>
+
+## TurnOptions
+
+每次 turn 的选项：
+
+```csharp icon="code"
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+
+var turn = await thread.RunAsync(
+    "Return a JSON summary of this repository.",
+    new TurnOptions
+    {
+        OutputSchema = schema,
+        CancellationToken = cts.Token,
+    });
+```
+
+| 属性 | 说明 |
+| --- | --- |
+| `OutputSchema` | JSON Schema，用于结构化输出，详见 [结构化输出](/sdks/codex/structured-output)。 |
+| `CancellationToken` | 取消 turn 时会终止 CLI 子进程。 |
+
+## Sandbox 与审批组合
+
+<Tabs>
+  <Tab title="只读">
+    ```csharp
+    new ThreadOptions
+    {
+        SandboxMode = SandboxMode.ReadOnly,
+        ApprovalPolicy = ApprovalMode.Never,
+    }
+    ```
+    适合分析、只读浏览。
+  </Tab>
+  <Tab title="Workspace 写入 + 按需审批">
+    ```csharp
+    new ThreadOptions
+    {
+        SandboxMode = SandboxMode.WorkspaceWrite,
+        ApprovalPolicy = ApprovalMode.OnRequest,
+        NetworkAccessEnabled = true,
+    }
+    ```
+    适合本地开发；写入受 sandbox 限制，涉及审批时暂停。
+  </Tab>
+</Tabs>

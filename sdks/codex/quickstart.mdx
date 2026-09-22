@@ -1,0 +1,143 @@
+---
+title: "Codex SDK for C# 快速开始"
+sidebarTitle: "快速开始"
+description: "安装 Codex SDK 与 Codex CLI，配置 API key，并跑通第一次 Buffered Turn 与流式事件调用。"
+---
+
+本页面帮助你在 .NET 10 项目中完成 Codex SDK for C# 的最小可用集成：安装 CLI、配置密钥，并跑通 Buffered Turn 与流式事件两种调用。
+
+## 前置条件
+
+<Steps>
+  <Step title="安装 .NET 10 SDK">
+    在开发机上安装 [.NET 10 SDK](https://dotnet.microsoft.com/download)。
+  </Step>
+  <Step title="安装 Node.js（通过 npm 安装 CLI 时需要）">
+    从 [nodejs.org](https://nodejs.org/) 安装 Node.js。
+  </Step>
+  <Step title="安装 Codex CLI">
+    ```bash
+    npm install -g @openai/codex
+    ```
+  </Step>
+  <Step title="配置 API key">
+    <CodeGroup>
+
+    ```bash macOS/Linux
+    export CODEX_API_KEY="your-api-key"
+    ```
+
+    ```powershell Windows PowerShell
+    $env:CODEX_API_KEY="your-api-key"
+    ```
+
+    ```cmd Windows CMD
+    set CODEX_API_KEY=your-api-key
+    ```
+
+    </CodeGroup>
+
+    也可以通过 `CodexOptions.ApiKey` 传入。
+  </Step>
+</Steps>
+
+## 安装 NuGet 包
+
+<CodeGroup>
+
+```bash 核心 SDK
+dotnet add package CodexSdk --prerelease
+```
+
+```bash MAF 集成
+dotnet add package CodexSdk.MAF --prerelease
+```
+
+</CodeGroup>
+
+## 第一次 Buffered Turn
+
+Buffered Turn 会等待整个 turn 完成后返回结果。适合命令行、脚本等对流式响应没有要求的场景。
+
+```csharp Program.cs icon="code"
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+var thread = codex.StartThread();
+
+var turn = await thread.RunAsync("List the files in the current directory.");
+
+Console.WriteLine(turn.FinalResponse);
+Console.WriteLine($"Thread ID: {thread.Id}");
+```
+
+<Tip>
+`thread.Id` 在收到 `ThreadStartedEvent` 后被填充，可用于后续 `Codex.ResumeThread(id)` 恢复会话。
+</Tip>
+
+## 流式事件
+
+流式模式返回 `IAsyncEnumerable<ThreadEvent>`，可实时拿到命令执行、Agent 消息与 Turn 结束等事件。
+
+```csharp icon="code"
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+var thread = codex.StartThread();
+
+await foreach (var evt in thread.RunStreamedAsync("Summarize this repository."))
+{
+    switch (evt)
+    {
+        case ItemCompletedEvent { Item: AgentMessageItem msg }:
+            Console.WriteLine($"[agent] {msg.Text}");
+            break;
+
+        case ItemCompletedEvent { Item: CommandExecutionItem cmd }:
+            Console.WriteLine($"[cmd] {cmd.Command} exit={cmd.ExitCode}");
+            Console.WriteLine(cmd.AggregatedOutput);
+            break;
+
+        case TurnCompletedEvent completed:
+            Console.WriteLine($"[usage] in={completed.Usage.InputTokens} out={completed.Usage.OutputTokens}");
+            break;
+    }
+}
+```
+
+## 使用 Microsoft Agent Framework
+
+若你的应用基于 MAF，可以将 Codex 作为 `AIAgent` 使用：
+
+```csharp icon="code"
+using Microsoft.Agents.AI;
+using OpenAI.CodexSdk.MAF;
+
+var agent = new CodexAIAgent();
+var session = await agent.CreateSessionAsync();
+
+var response = await agent.RunAsync(
+    "Explain what this project does in one paragraph.",
+    session);
+
+Console.WriteLine(response.Text);
+```
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="流式事件与 Item 类型" icon="wave-square" href="/sdks/codex/streaming">
+    了解所有事件、item 类型及使用模式。
+  </Card>
+  <Card title="Thread 恢复" icon="clock-rotate-left" href="/sdks/codex/threads">
+    使用 `ResumeThread` 跨进程延续会话。
+  </Card>
+  <Card title="结构化输出" icon="brackets-curly" href="/sdks/codex/structured-output">
+    通过 JSON Schema 约束 Codex 的响应结构。
+  </Card>
+  <Card title="配置" icon="sliders" href="/sdks/codex/configuration">
+    模型、Sandbox、审批与环境变量配置。
+  </Card>
+</CardGroup>

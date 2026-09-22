@@ -1,0 +1,76 @@
+---
+title: "Codex 结构化输出：用 JSON Schema 约束响应"
+sidebarTitle: "结构化输出"
+description: "在 Codex SDK 中使用 TurnOptions.OutputSchema 提供 JSON Schema，让 Codex 返回可直接解析的结构化数据。"
+---
+
+Codex SDK 允许在每次 turn 中通过 `TurnOptions.OutputSchema` 提供 JSON Schema，让 Codex 强制返回可直接解析的结构化结果。适合需要把 Codex 输出接入下游服务、数据库或自动化流程的场景。
+
+## 传入 Schema
+
+Schema 使用 `Dictionary<string, object?>` 表达，SDK 会将其写入临时 JSON 文件并作为 `codex exec --output-schema` 参数传给 CLI：
+
+```csharp icon="code" lines
+using OpenAI.CodexSdk;
+using CodexClient = OpenAI.CodexSdk.Codex;
+
+var codex = new CodexClient();
+var thread = codex.StartThread();
+
+var schema = new Dictionary<string, object?>
+{
+    ["type"] = "object",
+    ["properties"] = new Dictionary<string, object?>
+    {
+        ["summary"] = new Dictionary<string, object?> { ["type"] = "string" },
+        ["status"] = new Dictionary<string, object?>
+        {
+            ["type"] = "string",
+            ["enum"] = new[] { "ok", "action_required" },
+        },
+    },
+    ["required"] = new[] { "summary", "status" },
+    ["additionalProperties"] = false,
+};
+
+var turn = await thread.RunAsync(
+    "Summarize the git status of the current repository.",
+    new TurnOptions { OutputSchema = schema });
+
+Console.WriteLine(turn.FinalResponse);
+```
+
+`turn.FinalResponse` 会是一段符合 schema 的 JSON 字符串，可直接反序列化到你自己的类型。
+
+## 组合取消
+
+结构化输出可以与取消 token 一起使用：
+
+```csharp icon="code"
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+
+var turn = await thread.RunAsync(
+    "Return a JSON summary of this repository.",
+    new TurnOptions
+    {
+        OutputSchema = schema,
+        CancellationToken = cts.Token,
+    });
+```
+
+## 使用建议
+
+<CardGroup cols={2}>
+  <Card title="设置 additionalProperties=false" icon="lock">
+    可以避免 Codex 添加你不期望的字段。
+  </Card>
+  <Card title="使用 enum 约束状态字段" icon="list-check">
+    对下游需要分支的字段特别有用。
+  </Card>
+  <Card title="required 字段最小化" icon="feather">
+    只声明真正必需的字段，避免模型难以满足 schema。
+  </Card>
+  <Card title="配合 Buffered Turn" icon="bolt">
+    结构化输出通常与 `RunAsync` 配合使用，便于一次拿到完整 JSON。
+  </Card>
+</CardGroup>

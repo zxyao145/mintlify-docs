@@ -1,0 +1,107 @@
+---
+title: "AGW 使用场景：Agentflow、Jobs 与自动化"
+sidebarTitle: "使用场景"
+description: "了解 AGW 适用的多 Agent 协作流程、人-Agent 协作、自动化任务平台与 Cloud Desktop 控制平面场景。"
+---
+
+AGW 把外部编码 Agent、自定义 Agent、Jobs、Agentflow 与项目上下文串联起来，覆盖从日常自动化到多 Agent 编排的多种工作方式。本页面列出主要的适用场景与非适用场景。
+
+## 多 Agent 协作流程（Agentflow）
+
+Agentflow 适合相对明确、可拆分的知识工作，例如：
+
+```text
+资料收集 Agent
+        ↓
+分析 Agent
+        ↓
+内容生成 Agent
+        ↓
+人工审批
+        ↓
+发布/归档 Agent
+```
+
+**Agentflow 支持：**
+
+- 顺序执行
+- 扇出 / 汇聚
+- 有序条件分支
+- Handoff（交接）
+- 人工审批
+- 受控循环
+
+<Warning>
+Agentflow **不太适合**高度动态、需要深度自主规划的 Agent 群体。若任务边界不清晰，先考虑单 Agent + 工具，再决定是否引入编排。
+</Warning>
+
+## 人-Agent 协作平台
+
+基于 Jobs 能力，可以实现如下工作流：
+
+```text
+人：发布任务
+        ↓
+Agent：领取任务
+        ↓
+Agent：执行任务
+        ↓
+人：审核任务
+```
+
+Jobs 天然带有 Agent 推理能力、工具权限、上下文和持久化执行记录，比普通 Cron 更适合真正的知识型任务。
+
+## 自动化任务平台
+
+利用 Jobs、Integrations 与项目上下文，AGW 可以自动化：
+
+<CardGroup cols={2}>
+  <Card title="经营数据汇总" icon="chart-line">
+    每日汇总关键指标，写入内部系统或知识库。
+  </Card>
+  <Card title="GitHub Issue / PR" icon="github">
+    分类、总结与关联上下文。
+  </Card>
+  <Card title="依赖与安全检查" icon="shield-halved">
+    定期检查依赖、安全问题或文档漂移。
+  </Card>
+  <Card title="客服记录整理" icon="headset">
+    从客服系统抽取记录并生成结构化摘要。
+  </Card>
+  <Card title="日报 / 周报 / 发布说明" icon="file-lines">
+    自动生成人可读的运营与研发汇报。
+  </Card>
+  <Card title="定时信息抓取" icon="clock">
+    抓取外部信息并写入内部系统。
+  </Card>
+</CardGroup>
+
+### Job 类型
+
+- **一次性任务**：创建后执行一次，随后被禁用。
+- **定时任务**：在指定时间执行一次，执行后被禁用。
+- **周期任务**：以固定周期在指定时间重复执行，支持 Cron 表达式。
+
+## Cloud Desktop 环境
+
+AGW 可作为 Cloud Desktop 的 **Agent 控制平面**：让 AI 在隔离的云端工作区中持续、安全地执行开发与自动化任务，同时集中管理模型、工具、调度、审批与执行记录。
+
+## 是否适合你？
+
+<Tabs>
+  <Tab title="适合">
+    - 个人或小型研发团队自托管，需要在同一 UI 内管理多个 Agent
+    - 想把 Claude Code / Codex 变成可编排、可调度的服务
+    - 明确的、可拆分的自动化流程
+    - 需要人工审批介入的知识型任务
+  </Tab>
+  <Tab title="暂不适合">
+    - 面向不可信用户的对外服务（缺少 sandbox 隔离）
+    - 需要极度自主规划的 Agent 群体
+    - 需要生产级 SLA 与稳定 API 的场景（1.0 前 schema 可能变化）
+  </Tab>
+</Tabs>
+
+<Note>
+每个 `Project.Workspace` 必须是 AGW Server 进程可见的目录。文件 API、Git、Claude Code 与 Codex 使用同一棵本地工作树；网络存储需先在操作系统或容器平台完成挂载。详见 [项目 Workspace](/workspaces)。
+</Note>
