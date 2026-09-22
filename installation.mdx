@@ -1,0 +1,87 @@
+---
+title: "安装 Claude Code SDK for C# 与依赖项"
+sidebarTitle: "安装"
+description: "安装 ClaudeCodeSdk 和 ClaudeCodeSdk.MAF NuGet 包，并准备好 .NET 10.0 与 Claude Code CLI 环境。"
+---
+
+Claude Code SDK for C# 分为核心包和可选的 MAF 集成包，通过 NuGet 分发。所有版本都依赖 Claude Code CLI 作为子进程后端。
+
+## 环境要求
+
+- **.NET 10.0 SDK**：目标框架为 `net10.0`。
+- **Claude Code CLI**：SDK 通过子进程与其通信，需要在 `PATH` 中可用。
+- **Anthropic API 密钥**：通过 `ANTHROPIC_AUTH_TOKEN` 环境变量或 `ClaudeCodeOptions.ApiKey` 提供。
+
+## 安装 Claude Code CLI
+
+```bash icon=terminal
+npm install -g @anthropic-ai/claude-code
+```
+
+安装后可通过 `claude --version` 验证是否加入 `PATH`。
+
+## 安装 NuGet 包
+
+### 核心 SDK
+
+`ClaudeCodeSdk` 提供进程管理、消息协议、`ClaudeQuery` 与 `ClaudeSdkClient`。
+
+<CodeGroup>
+
+```bash dotnet CLI
+dotnet add package ClaudeCodeSdk
+```
+
+```xml PackageReference
+<PackageReference Include="ClaudeCodeSdk" Version="*" />
+```
+
+</CodeGroup>
+
+### Microsoft Agent Framework 集成（可选）
+
+`ClaudeCodeSdk.MAF` 在核心 SDK 之上提供 `ClaudeCodeAIAgent`，将 Claude 暴露为 MAF 的 `AIAgent`。
+
+<CodeGroup>
+
+```bash dotnet CLI
+dotnet add package ClaudeCodeSdk.MAF
+```
+
+```xml PackageReference
+<PackageReference Include="ClaudeCodeSdk.MAF" Version="*" />
+```
+
+</CodeGroup>
+
+## 版本号约定
+
+包版本使用 `x.y.z` 格式，预览版会附带 `-preview` 后缀：
+
+- `x` 跟随目标 .NET 版本。
+- `y` 在库引入破坏性变更或升级 Microsoft Agent Framework 依赖时递增。
+- `z` 用于常规补丁发布。
+
+## 验证安装
+
+创建一个最小示例，验证 SDK 与 CLI 能否协同工作：
+
+```csharp Program.cs icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+await foreach (var message in ClaudeQuery.QueryAsync("你好"))
+{
+    if (message is AssistantMessage assistantMessage)
+    {
+        foreach (var text in assistantMessage.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(text.Text);
+        }
+    }
+}
+```
+
+<Warning>
+  如果运行时出现 `CLINotFoundException`，请确认 Claude Code CLI 已安装并加入 `PATH`。详见 [故障排查](/reference/troubleshooting)。
+</Warning>

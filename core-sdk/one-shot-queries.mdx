@@ -1,0 +1,105 @@
+---
+title: "使用 ClaudeQuery 发起一次性查询"
+sidebarTitle: "一次性查询"
+description: "使用 ClaudeQuery.QueryAsync 发起单次 Claude 请求，通过 IAsyncEnumerable 流式接收助手消息与结果。"
+---
+
+`ClaudeQuery` 提供最简单的调用方式：一次请求、一次流式响应，SDK 自动管理连接生命周期。适合脚本、批处理和无需保持会话的场景。
+
+## 基本用法
+
+```csharp icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+await foreach (var message in ClaudeQuery.QueryAsync("解释一下依赖注入"))
+{
+    if (message is AssistantMessage assistantMessage)
+    {
+        foreach (var text in assistantMessage.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(text.Text);
+        }
+    }
+}
+```
+
+## 传入选项
+
+通过 `ClaudeCodeOptions` 可自定义模型、系统提示、工作目录等：
+
+```csharp icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+var options = new ClaudeCodeOptions
+{
+    Model = "sonnet",
+    SystemPrompt = "你是一名资深 C# 开发者。",
+    MaxTurns = 5,
+    WorkingDirectory = "/path/to/project"
+};
+
+await foreach (var message in ClaudeQuery.QueryAsync("审查当前项目结构", options))
+{
+    // 处理消息
+}
+```
+
+完整选项列表见 [配置选项](/configuration/options)。
+
+## 处理不同的消息类型
+
+`ClaudeQuery.QueryAsync` 返回 `IAsyncEnumerable<IMessage>`，可能包含以下类型：
+
+```csharp icon=code
+await foreach (var message in ClaudeQuery.QueryAsync("你好"))
+{
+    switch (message)
+    {
+        case AssistantMessage assistant:
+            foreach (var block in assistant.Content)
+            {
+                if (block is TextBlock text) Console.WriteLine(text.Text);
+            }
+            break;
+
+        case SystemMessage system:
+            Console.WriteLine($"[system] {system}");
+            break;
+
+        case ResultMessage result:
+            Console.WriteLine($"完成，token 使用：{result}");
+            break;
+    }
+}
+```
+
+各类型的详细字段参见 [消息类型](/core-sdk/message-types)。
+
+## 流式终止行为
+
+`ClaudeQuery` 依赖 `ClaudeProcess.ReceiveAsync()` 的自动终止机制：
+
+- 当出现没有待处理委派 agent 的 result 消息，或出现 error result 时，流会结束。
+- 被委派的 `local_agent` 和 `local_workflow` 任务通过 `task_started`、`task_notification` 与终态 `task_updated` 事件跟踪。所有 result（包括中间 result）都会按顺序转发，收到中间 result 时不会停止枚举。
+- 取消 token 仍然可以中断等待；如果在等待最终 result 时遇到 EOF，会抛出 `ProcessException`。
+
+<Note>
+  该机制依赖 CLI 的生命周期事件：如果 CLI 在发出较早一轮的 result 之前就上报所有任务完成，SDK 无法检测到仍有待处理的后续。
+</Note>
+
+## 取消查询
+
+传入 `CancellationToken` 可以中止查询：
+
+```csharp icon=code
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+await foreach (var message in ClaudeQuery.QueryAsync(
+    "帮我分析这段代码",
+    cancellationToken: cts.Token))
+{
+    // 处理消息
+}
+```

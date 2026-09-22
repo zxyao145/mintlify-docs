@@ -1,0 +1,89 @@
+---
+title: "Microsoft Agent Framework 集成概览"
+sidebarTitle: "概览"
+description: "ClaudeCodeSdk.MAF 将 Claude 作为 AIAgent 接入 Microsoft Agent Framework，支持会话、流式响应和工具调用。"
+---
+
+`ClaudeCodeSdk.MAF` 将 Claude Code 集成到 Microsoft Agent Framework（MAF），提供完整的 `AIAgent` 实现，使 Claude 可以像任何 MAF agent 一样使用。
+
+## 主要能力
+
+- ✅ 流式与非流式响应
+- ✅ 多轮对话与自动会话管理
+- ✅ 会话序列化与反序列化，用于持久化
+- ✅ 工具调用（function calling）
+- ✅ 思考／推理内容块
+- ✅ 支持图像 `DataContent` 输入，包括仅图像的消息
+- ✅ Token 使用与成本跟踪
+- ✅ 兼容 `Microsoft.Extensions.AI` 接口
+
+## 基本用法
+
+```csharp icon=code
+using ClaudeCodeSdk.MAF;
+using Microsoft.Extensions.AI;
+
+await using var agent = new ClaudeCodeAIAgent();
+
+var response = await agent.RunAsync("你好，可以帮我讲讲 C# 编程吗？");
+foreach (var message in response.Messages)
+{
+    if (message.Contents is null) continue;
+    foreach (var content in message.Contents)
+    {
+        if (content is TextContent text) Console.WriteLine(text.Text);
+    }
+}
+```
+
+## 核心类
+
+### ClaudeCodeAIAgent
+
+实现 `Microsoft.Agents.AI.AIAgent`：
+
+- `CreateSessionAsync()`：创建新的会话
+- `RunAsync()`：执行查询并返回完整响应
+- `RunStreamingAsync()`：以流式方式执行查询
+- `DeserializeSessionAsync()`：还原持久化的会话
+
+### ClaudeCodeAgentSession
+
+内部会话实现：
+
+- 维护会话 ID，用于对话连续性
+- 创建时生成 ID，或从序列化状态恢复 ID
+- 支持序列化以进行持久化
+
+### ClaudeSdkClientManager
+
+- 自动管理客户端生命周期
+- 切换会话时释放旧客户端
+- 使用异步资源管理保证会话安全
+- 优化跨会话的资源使用
+
+## System 消息处理
+
+<Warning>
+  MAF 会转发第一条用户消息的文本与图像 `DataContent`。请求中的 `ChatRole.System` 消息目前会被忽略。如需全局指令，请使用 `ClaudeCodeAIAgentOptions.SystemPrompt` 或 `AppendSystemPrompt`。
+</Warning>
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="会话管理" icon="clock-rotate-left" href="/maf-sdks/sessions">
+    创建、复用与持久化多轮对话会话。
+  </Card>
+
+  <Card title="流式响应" icon="wave-square" href="/maf-sdks/streaming">
+    实时接收 token 级增量与工具调用。
+  </Card>
+
+  <Card title="Chat History Provider" icon="database" href="/maf-sdks/chat-history">
+    对接自定义历史存储，如数据库或 Redis。
+  </Card>
+
+  <Card title="架构参考" icon="diagram-project" href="/reference/architecture">
+    深入了解 MAF 集成的组件与运行流程。
+  </Card>
+</CardGroup>

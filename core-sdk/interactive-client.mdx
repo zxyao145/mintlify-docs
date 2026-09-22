@@ -1,0 +1,97 @@
+---
+title: "使用 ClaudeSdkClient 建立交互式会话"
+sidebarTitle: "交互式客户端"
+description: "使用 ClaudeSdkClient 建立长连接的双向通信，实现多轮对话、中断控制和显式的资源管理。"
+---
+
+`ClaudeSdkClient` 提供长连接的双向通信，适合多轮对话、需要中断当前生成或需要显式控制连接生命周期的场景。
+
+## 基本用法
+
+```csharp icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+
+await client.QueryAsync("你好，Claude！");
+
+await foreach (var message in client.ReceiveResponseAsync())
+{
+    if (message is AssistantMessage assistantMsg)
+    {
+        foreach (var text in assistantMsg.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine($"Claude: {text.Text}");
+        }
+    }
+}
+```
+
+## 多轮对话
+
+在同一个 `client` 上多次调用 `QueryAsync` 与 `ReceiveResponseAsync` 即可进行多轮对话，上下文由 CLI 侧维持：
+
+```csharp icon=code
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+
+await client.QueryAsync("我要写一个 REST API");
+await foreach (var msg in client.ReceiveResponseAsync()) { /* 处理第一轮 */ }
+
+await client.QueryAsync("使用 Minimal API 重写");
+await foreach (var msg in client.ReceiveResponseAsync()) { /* 处理第二轮 */ }
+```
+
+## 中断当前响应
+
+`ClaudeSdkClient` 支持在响应过程中调用 `InterruptAsync` 中断：
+
+```csharp icon=code
+var receiveTask = Task.Run(async () =>
+{
+    await foreach (var message in client.ReceiveResponseAsync())
+    {
+        // 处理消息
+    }
+});
+
+// 稍后取消
+await client.InterruptAsync();
+```
+
+## 传入选项
+
+```csharp icon=code
+var options = new ClaudeCodeOptions
+{
+    Model = "sonnet",
+    SystemPrompt = "你是一名 .NET 架构师。",
+    PermissionMode = PermissionMode.acceptEdits,
+    MaxTurns = 20
+};
+
+await using var client = new ClaudeSdkClient(options);
+await client.ConnectAsync();
+```
+
+## ReceiveResponseAsync 的语义
+
+- `ReceiveResponseAsync` 通过流完成来转发所有消息，包括中间 result。
+- 与 `ClaudeQuery` 相同，流的终止由 `ClaudeProcess.ReceiveAsync()` 的自动终止机制决定，详见 [一次性查询](/core-sdk/one-shot-queries)。
+
+## 资源管理
+
+`ClaudeSdkClient` 实现 `IAsyncDisposable`，请始终使用 `await using`：
+
+```csharp icon=code
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+// ...
+// 作用域退出时会自动 Disconnect 与 Dispose
+```
+
+<Warning>
+  不要跨线程共享同一个 `ClaudeSdkClient` 实例的读写调用；若需并发处理多个会话，请为每个会话创建独立的 client。
+</Warning>

@@ -1,47 +1,138 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Claude Code SDK for C# 快速开始指南"
+sidebarTitle: "快速开始"
+description: "在几分钟内完成 Claude Code SDK for C# 的安装、鉴权配置以及第一次一次性查询和交互式会话。"
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+本页面帮助你在 .NET 10.0 项目中完成 Claude Code SDK for C# 的最小可用集成，覆盖安装、鉴权和两种常见调用模式。
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+## 前置条件
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="安装 .NET 10.0 SDK">
+    在开发机上安装 [.NET 10.0 SDK](https://dotnet.microsoft.com/download)。
+  </Step>
+  <Step title="安装 Claude Code CLI">
+    SDK 通过子进程调用 Claude Code CLI，因此需要将其安装到 `PATH`：
 
     ```bash
-    npm install your-package
+    npm install -g @anthropic-ai/claude-code
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="配置 API 密钥">
+    通过环境变量设置 Anthropic API 密钥：
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+    <CodeGroup>
 
-    ```bash
-    your-cli start
+    ```bash macOS/Linux
+    export ANTHROPIC_AUTH_TOKEN="your-api-key"
     ```
+
+    ```powershell Windows PowerShell
+    $env:ANTHROPIC_AUTH_TOKEN="your-api-key"
+    ```
+
+    ```cmd Windows CMD
+    set ANTHROPIC_AUTH_TOKEN=your-api-key
+    ```
+
+    </CodeGroup>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## 安装 NuGet 包
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+<CodeGroup>
+
+```bash 核心 SDK
+dotnet add package ClaudeCodeSdk
+```
+
+```bash MAF 集成
+dotnet add package ClaudeCodeSdk.MAF
+```
+
+</CodeGroup>
+
+## 第一次一次性查询
+
+使用 `ClaudeQuery.QueryAsync` 发起一次性请求，通过 `IAsyncEnumerable<IMessage>` 逐条接收消息。
+
+```csharp Program.cs icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+await foreach (var message in ClaudeQuery.QueryAsync("法国的首都是哪里？"))
+{
+    if (message is AssistantMessage assistantMessage)
+    {
+        foreach (var text in assistantMessage.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(text.Text);
+        }
+    }
+}
+```
+
+## 交互式多轮对话
+
+`ClaudeSdkClient` 提供长连接的双向通信，可用于多轮会话。
+
+```csharp icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+
+await client.QueryAsync("你好，Claude！");
+
+await foreach (var message in client.ReceiveResponseAsync())
+{
+    if (message is AssistantMessage assistantMsg)
+    {
+        foreach (var text in assistantMsg.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine($"Claude: {text.Text}");
+        }
+    }
+}
+```
+
+<Tip>
+  所有实现 `IAsyncDisposable` 的对象都应通过 `await using` 使用，以确保子进程正确清理。
 </Tip>
+
+## 使用 Microsoft Agent Framework
+
+如果你的应用基于 MAF，可以将 Claude 作为 `AIAgent` 使用：
+
+```csharp icon=code
+using ClaudeCodeSdk.MAF;
+using Microsoft.Extensions.AI;
+
+await using var agent = new ClaudeCodeAIAgent();
+
+var response = await agent.RunAsync("用中文解释 C# 中的 async/await");
+Console.WriteLine(response.Text);
+```
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="一次性查询" icon="bolt" href="/core-sdk/one-shot-queries">
+    深入了解 `ClaudeQuery` 的消息流与终止行为。
+  </Card>
+
+  <Card title="MAF 集成" icon="puzzle-piece" href="/maf-sdks/overview">
+    使用会话、流式增量和工具调用。
+  </Card>
+
+  <Card title="配置选项" icon="sliders" href="/configuration/options">
+    自定义模型、系统提示、思考 token 和工作目录。
+  </Card>
+
+  <Card title="故障排查" icon="wrench" href="/reference/troubleshooting">
+    解决 CLI 未找到、鉴权失败和进程生命周期问题。
+  </Card>
+</CardGroup>

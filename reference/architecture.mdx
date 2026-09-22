@@ -1,0 +1,121 @@
+---
+title: "Claude Code SDK for C# 架构与运行流程"
+sidebarTitle: "架构"
+description: "了解 ClaudeProcess、ClaudeQuery、ClaudeSdkClient 与 MAF 集成组件如何协作，覆盖流式管道和会话生命周期。"
+---
+
+Claude Code SDK for C# 采用双模式架构：核心的 `ClaudeProcess` 统一管理与 Claude Code CLI 的进程通信，`ClaudeQuery` 与 `ClaudeSdkClient` 在其上提供不同的调用模式。MAF 集成在此基础上适配 `AIAgent` 契约。
+
+## 分层示意
+
+```mermaid
+flowchart TB
+    subgraph Consumer["Microsoft.Extensions.AI / Microsoft.Agents.AI"]
+        AIAgent["AIAgent 接口"]
+    end
+
+    subgraph MAF["ClaudeCodeSdk.MAF"]
+        Agent["ClaudeCodeAIAgent"]
+        SM["ClaudeSdkClientManager"]
+        Sess["ClaudeCodeAgentSession"]
+        Opt["ClaudeCodeAIAgentOptions"]
+        Proc["ClaudeStreamingMessageProcessor"]
+        Mapper["ClaudePartialMessageMapper"]
+        Acc["ClaudeStreamingHistoryAccumulator"]
+        PB["ClaudeMafPromptBuilder"]
+        Ext["IMessageExtension"]
+    end
+
+    subgraph Core["ClaudeCodeSdk"]
+        Q["ClaudeQuery"]
+        C["ClaudeSdkClient"]
+        P["ClaudeProcess"]
+    end
+
+    AIAgent --> Agent
+    Agent --> SM
+    Agent --> Sess
+    Agent --> Opt
+    Agent --> Proc
+    Proc --> Mapper
+    Proc --> Acc
+    Agent --> PB
+    Agent --> Ext
+    Agent --> Q
+    Agent --> C
+    SM --> C
+    Q --> P
+    C --> P
+```
+
+## 非流式 Run 流程
+
+`RunAsync` 收集完整对话并返回单个 `AgentResponse`。配置了 `ChatHistoryProvider` 时，内部仍会运行流式状态机，以便对完成的消息增量持久化。
+
+```mermaid
+sequenceDiagram
+    participant App as 你的应用
+    participant Agent as ClaudeCodeAIAgent
+    participant Prov as ChatHistoryProvider
+    participant Client as ClaudeSdkClient
+    participant CLI as Claude Code CLI
+
+    App->>Agent: RunAsync(messages, session)
+    Agent->>Prov: InvokingAsync(context)
+    Agent->>Agent: PrepareSessionAsync（若为空则创建）
+    Agent->>Agent: ClaudeMafPromptBuilder.Create(messages)
+    Agent->>Client: QueryAsync(content, sessionId)
+    Client->>CLI: 写入用户消息
+    loop 直到 result
+        CLI-->>Client: IMessage
+        Client-->>Agent: IMessage
+        Agent->>Agent: ToChatMessage() 并累积
+        Agent->>Prov: InvokedAsync（每条完成的消息）
+    end
+    Agent-->>App: AgentResponse（Messages + Usage）
+```
+
+## 流式管道
+
+`RunStreamingAsync` 会在增量到达时逐个 yield `AgentResponseUpdate`。处理器把每条 `IMessage` 送入映射器，在 yield 之前先持久化完成的 Assistant 批次，并在运行退出时统一在 `finally` 中排空剩余更新。
+
+```mermaid
+sequenceDiagram
+    participant App as 你的应用
+    participant Agent as ClaudeCodeAIAgent
+    participant Proc as ClaudeStreamingMessageProcessor
+    participant Map as ClaudePartialMessageMapper
+    participant Acc as ClaudeStreamingHistoryAccumulator
+    participant CLI as Claude Code CLI
+
+    App->>Agent: RunStreamingAsync(messages, session)
+    Agent->>CLI: QueryAsync(content, sessionId)
+    loop 每条 message / stream_event
+        CLI-->>Agent: StreamEvent / AssistantMessage / ResultMessage
+        Agent->>Proc: Process(message)
+        Proc->>Map: Map(message) -> AgentResponseUpdate[]
+        Proc->>Acc: Add(updates)
+        Proc->>Proc: TryConsumeCompletedMessageId -> CompleteAssistantMessage
+        Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+        Agent-->>App: yield 每个 AgentResponseUpdate
+    end
+    Note over Agent,CLI: 正常结束 / 失败 / 取消 / 提前释放
+    Agent->>Proc: CompleteRun() -> 剩余全部更新
+    Agent->>Agent: PersistStreamingBatch，CancellationToken.None
+```
+
+## 消息终止行为
+
+- `ClaudeProcess.ReceiveAsync()` 在没有待处理委派 agent 的 result 或错误 result 出现时终止。
+- `local_agent` 与 `local_workflow` 委派任务通过 `task_started`、`task_notification` 与终态 `task_updated` 追踪；所有 result 按顺序转发，中间 result **不会**中止枚举。
+- MAF 只要求最终成功 result 具备结构化输出，中间 result 可以是纯文本。
+- 若 CLI 在发出较早一轮 result 之前就上报所有任务完成，SDK 无法感知仍有后续待处理。
+- 取消 token 可中断等待；等待最终 result 时遇到 EOF 会抛 `ProcessException`。
+
+## 资源管理
+
+所有管理进程的类都实现 `IAsyncDisposable`：
+
+- `ClaudeProcess` 负责子进程 start／kill／cleanup。
+- 使用 `await using` 保证自动清理。
+- `ClaudeSdkClientManager` 在切换会话时释放旧客户端。

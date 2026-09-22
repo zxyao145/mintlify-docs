@@ -1,0 +1,132 @@
+---
+title: "常见问题与故障排查步骤"
+sidebarTitle: "故障排查"
+description: "解决 Claude Code CLI 未找到、鉴权失败、会话未持久化以及进程生命周期相关问题。"
+---
+
+本页汇总了 Claude Code SDK for C# 使用过程中最常见的问题及其解决方式。
+
+## Claude Code CLI 未找到
+
+**错误：** `CLINotFoundException`。
+
+**解决方式：** 全局安装 Claude Code CLI，并确认其在 `PATH` 中：
+
+```bash icon=terminal
+npm install -g @anthropic-ai/claude-code
+claude --version
+```
+
+## 鉴权错误
+
+**症状：** CLI 返回未授权或 401。
+
+**解决方式：** 设置 API 密钥：
+
+<CodeGroup>
+
+```bash macOS/Linux
+export ANTHROPIC_AUTH_TOKEN="your-api-key"
+```
+
+```powershell Windows PowerShell
+$env:ANTHROPIC_AUTH_TOKEN="your-api-key"
+```
+
+```cmd Windows CMD
+set ANTHROPIC_AUTH_TOKEN=your-api-key
+```
+
+</CodeGroup>
+
+或通过选项直接传入：
+
+```csharp icon=code
+var options = new ClaudeCodeOptions { ApiKey = "your-api-key" };
+```
+
+## 进程生命周期问题
+
+**症状：** 子进程未释放、端口占用或资源泄漏。
+
+**解决方式：** 所有实现 `IAsyncDisposable` 的类型必须使用 `await using`：
+
+```csharp icon=code
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+// ...使用 client
+// 作用域退出时自动 Disconnect + Dispose
+```
+
+## MAF 会话未保留上下文
+
+**症状：** 多轮对话中 Claude 忘记上一轮内容。
+
+**解决方式：** 确认每次调用都传入**同一个** `AgentSession` 对象：
+
+```csharp icon=code
+var session = await agent.CreateSessionAsync();
+await agent.RunAsync([...], session: session); // 第一轮
+await agent.RunAsync([...], session: session); // 第二轮，同一 session
+```
+
+<Warning>
+  每次 `CreateSessionAsync()` 都会新建一个独立会话；如果需要跨进程恢复，请通过 `SerializeSessionAsync` / `DeserializeSessionAsync` 持久化会话。
+</Warning>
+
+## System 消息似乎被忽略
+
+**症状：** 在 MAF 请求中传入 `ChatRole.System` 后没有效果。
+
+**解决方式：** MAF 集成当前忽略请求内的 System 消息。请改用 `ClaudeCodeAIAgentOptions.SystemPrompt` 或 `AppendSystemPrompt` 设置全局指令：
+
+```csharp icon=code
+var options = new ClaudeCodeAIAgentOptions
+{
+    SystemPrompt = "你是一名 C# 专家。"
+};
+await using var agent = new ClaudeCodeAIAgent(options);
+```
+
+## 流式增量未按 token 到达
+
+**症状：** `RunStreamingAsync` 只返回粗粒度的更新。
+
+**解决方式：** 启用 `IncludePartialMessages`：
+
+```csharp icon=code
+var options = new ClaudeCodeAIAgentOptions
+{
+    IncludePartialMessages = true
+};
+```
+
+详见 [流式响应](/maf-sdks/streaming)。
+
+## 代理或自建端点无法连接
+
+**解决方式：** 配置 `BaseUrl` 或代理相关的环境变量：
+
+```csharp icon=code
+var options = new ClaudeCodeOptions
+{
+    BaseUrl = "https://your-proxy.example.com",
+    EnvironmentVariables = new Dictionary<string, string?>
+    {
+        { "HTTP_PROXY", "http://proxy:1080" },
+        { "HTTPS_PROXY", "http://proxy:1080" }
+    }
+};
+```
+
+## 还是无法解决？
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/zxyao145/claude-code-sdk-csharp/issues">
+    在项目仓库提交问题反馈。
+  </Card>
+
+  <Card title="Claude Code 文档" icon="book" href="https://code.claude.com/docs">
+    查阅 Claude Code CLI 官方文档。
+  </Card>
+</CardGroup>

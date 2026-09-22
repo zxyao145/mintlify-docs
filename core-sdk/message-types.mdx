@@ -1,0 +1,119 @@
+---
+title: "消息类型、内容块和异常层次结构"
+sidebarTitle: "消息与类型"
+description: "Claude Code SDK 的 IMessage、IContentBlock 与 ClaudeSDKException 类型参考，涵盖助手消息、工具调用与错误。"
+---
+
+Claude Code SDK for C# 使用强类型的消息与内容块模型来表示 Claude 与 CLI 之间的所有通信，并通过 `ClaudeSDKException` 层级暴露错误信息。
+
+## 消息类型
+
+所有消息实现 `IMessage` 接口：
+
+| 类型 | 说明 |
+| --- | --- |
+| `AssistantMessage` | Claude 的响应，`Content` 包含一组内容块。 |
+| `UserMessage` | 用户输入。 |
+| `SystemMessage` | 系统通知和元数据。 |
+| `ResultMessage` | 会话结束标记，携带 token 使用与成本信息。 |
+| `StreamEvent` | 启用 `IncludePartialMessages` 时发出的原始 partial-message 事件。 |
+
+### 判别处理示例
+
+```csharp icon=code
+switch (message)
+{
+    case AssistantMessage assistant:
+        // 助手响应
+        break;
+    case UserMessage user:
+        // 用户输入回显
+        break;
+    case SystemMessage system:
+        // 系统级消息
+        break;
+    case ResultMessage result:
+        // 会话结束，可读取 usage
+        break;
+    case StreamEvent stream:
+        // 原始 partial-message 事件（仅启用 partial 时出现）
+        break;
+}
+```
+
+## 内容块
+
+所有内容块实现 `IContentBlock` 接口：
+
+| 类型 | 说明 |
+| --- | --- |
+| `TextBlock` | 普通文本内容。 |
+| `ThinkingBlock` | Claude 的推理内容（启用扩展思考时）。 |
+| `ToolUseBlock` | 工具调用请求。 |
+| `ToolResultBlock` | 工具执行结果。 |
+| `ErrorContentBlock` | 错误信息。 |
+
+### 提取内容块
+
+```csharp icon=code
+if (message is AssistantMessage assistant)
+{
+    foreach (var block in assistant.Content)
+    {
+        switch (block)
+        {
+            case TextBlock text:
+                Console.WriteLine(text.Text);
+                break;
+            case ThinkingBlock thinking:
+                Console.WriteLine($"[思考] {thinking}");
+                break;
+            case ToolUseBlock toolUse:
+                Console.WriteLine($"[工具调用] {toolUse}");
+                break;
+            case ToolResultBlock toolResult:
+                Console.WriteLine($"[工具结果] {toolResult}");
+                break;
+            case ErrorContentBlock error:
+                Console.WriteLine($"[错误] {error}");
+                break;
+        }
+    }
+}
+```
+
+## 异常层次结构
+
+所有 SDK 自定义异常继承自 `ClaudeSDKException`：
+
+| 异常 | 说明 |
+| --- | --- |
+| `CLINotFoundException` | 无法定位 Claude Code CLI。 |
+| `CLIConnectionException` | 传输层连接问题。 |
+| `ProcessException` | 子进程执行失败。 |
+| `CLIJsonDecodeException` | 消息解析错误。 |
+| `MessageParseException` | 类型转换失败。 |
+
+### 处理异常示例
+
+```csharp icon=code
+try
+{
+    await foreach (var message in ClaudeQuery.QueryAsync("你好"))
+    {
+        // 处理消息
+    }
+}
+catch (CLINotFoundException)
+{
+    Console.WriteLine("未找到 Claude Code CLI，请运行 npm install -g @anthropic-ai/claude-code");
+}
+catch (ClaudeSDKException ex)
+{
+    Console.WriteLine($"SDK 调用失败：{ex.Message}");
+}
+```
+
+<Tip>
+  如果只想统一处理 SDK 错误，捕获基类 `ClaudeSDKException` 即可。
+</Tip>

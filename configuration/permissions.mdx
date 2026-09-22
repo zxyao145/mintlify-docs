@@ -1,0 +1,78 @@
+---
+title: "处理工具权限与 AskUserQuestion 交互"
+sidebarTitle: "工具权限"
+description: "使用 CanUseTool 回调无终端地处理 Claude Code 权限请求，并为 AskUserQuestion 提供用户输入。"
+---
+
+设置 `CanUseTool` 可以让你的应用无需终端即可处理 Claude Code 的权限请求。SDK 会自动为 CLI 添加 `--permission-prompt-tool stdio` 参数，你的回调可以保持挂起等待用户输入。
+
+## 基本回调
+
+```csharp icon=code
+using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
+
+var options = new ClaudeCodeOptions
+{
+    CanUseTool = async (toolName, input, context, cancellationToken) =>
+    {
+        if (toolName != "AskUserQuestion")
+        {
+            return new PermissionResultDeny($"不支持的请求：{toolName}");
+        }
+
+        var updatedInput = await CollectAnswersAsync(input, cancellationToken);
+        return new PermissionResultAllow(updatedInput);
+    }
+};
+```
+
+## 返回值说明
+
+- `PermissionResultAllow`：允许调用。如果不传入 `UpdatedInput`，保留原始输入。
+- `PermissionResultDeny`：拒绝调用，可携带原因字符串。
+- 对于 `AskUserQuestion`，需要返回原始 `questions` 加上 `answers` 对象。
+
+## 权限模式
+
+配合 `PermissionMode` 可以粗粒度地控制工具授权行为：
+
+| 值 | 行为 |
+| --- | --- |
+| `@default` | 默认：需要人工确认。 |
+| `acceptEdits` | 自动接受编辑类工具。 |
+| `plan` | 仅规划，不真正执行。 |
+| `bypassPermissions` | 跳过权限提示，直接允许。 |
+
+## 与取消 token 的关系
+
+<Note>
+  取消查询也会取消挂起的 `CanUseTool` 回调。请在回调实现里遵守 `cancellationToken`，以便及时释放资源。
+</Note>
+
+## 完整示例
+
+```csharp icon=code
+var options = new ClaudeCodeOptions
+{
+    Model = "sonnet",
+    PermissionMode = PermissionMode.acceptEdits,
+    CanUseTool = async (toolName, input, context, cancellationToken) =>
+    {
+        // 只在 AskUserQuestion 时打断
+        if (toolName == "AskUserQuestion")
+        {
+            var answers = await ShowQuestionsToUiAsync(input, cancellationToken);
+            return new PermissionResultAllow(answers);
+        }
+
+        // 其它工具直接放行
+        return new PermissionResultAllow();
+    }
+};
+
+await foreach (var message in ClaudeQuery.QueryAsync("重构这个文件", options))
+{
+    // 处理消息
+}
+```

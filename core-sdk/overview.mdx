@@ -1,0 +1,64 @@
+---
+title: "核心 SDK 概览与架构组成"
+sidebarTitle: "概览"
+description: "了解 ClaudeCodeSdk 的核心组件：ClaudeProcess 子进程管理、ClaudeQuery 一次性 API 与 ClaudeSdkClient 交互式 API。"
+---
+
+`ClaudeCodeSdk` 通过一个统一的子进程管理器 `ClaudeProcess` 与 Claude Code CLI 通信，并在其上暴露两种调用模式：适合单次请求的 `ClaudeQuery`，以及适合多轮对话的 `ClaudeSdkClient`。
+
+## 核心组件
+
+### ClaudeProcess
+
+统一的子进程管理器，负责与 Claude Code CLI 直接通信：
+
+- 基于 JSON 的消息协议，具备强类型解析
+- 自动发现 CLI 位置，管理进程生命周期
+- 同时被 `ClaudeQuery` 和 `ClaudeSdkClient` 复用
+
+### ClaudeQuery
+
+一次性查询 API，适用于单次请求场景：
+
+- Fire-and-forget 模式
+- 通过 `IAsyncEnumerable<IMessage>` 流式返回响应
+- 自动处理连接生命周期
+
+### ClaudeSdkClient
+
+交互式客户端 API，适用于长连接和多轮对话：
+
+- 通过 `ConnectAsync` 和 `DisconnectAsync` 手动控制连接
+- 支持多轮会话管理
+- 支持中断（interrupt）和显式资源清理
+
+## 何时选择哪个 API
+
+<CardGroup cols={2}>
+  <Card title="使用 ClaudeQuery" icon="bolt" href="/core-sdk/one-shot-queries">
+    单次问答、脚本任务、批处理场景。
+  </Card>
+
+  <Card title="使用 ClaudeSdkClient" icon="comments" href="/core-sdk/interactive-client">
+    多轮对话、需要中断或长连接的场景。
+  </Card>
+</CardGroup>
+
+## 消息与内容块
+
+所有消息实现 `IMessage`，所有内容块实现 `IContentBlock`。详细类型参见 [消息类型](/core-sdk/message-types)。
+
+## 资源管理
+
+所有管理进程的类型都实现了 `IAsyncDisposable`，请务必使用 `await using` 确保子进程被正确关闭：
+
+```csharp icon=code
+await using var client = new ClaudeSdkClient();
+await client.ConnectAsync();
+// ...使用 client
+// 作用域退出时自动释放
+```
+
+## JSON 序列化
+
+SDK 通过内部的 `JsonUtil` 统一使用 `snake_case_lower` 命名策略，以匹配 Claude Code CLI 的消息格式。

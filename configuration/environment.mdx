@@ -1,0 +1,74 @@
+---
+title: "环境变量与 Claude Code CLI 交互"
+sidebarTitle: "环境变量"
+description: "SDK 自动为 Claude Code CLI 注入的环境变量，包括鉴权 token、基础 URL 与 SDK 标识。"
+---
+
+SDK 会为每次启动的 Claude Code CLI 子进程自动配置以下环境变量，来源来自 `ClaudeCodeOptions` 或宿主进程环境。
+
+## 自动注入的变量
+
+| 变量 | 说明 |
+| --- | --- |
+| `ANTHROPIC_AUTH_TOKEN` | API 鉴权 token，取自 `ClaudeCodeOptions.ApiKey` 或宿主环境。 |
+| `ANTHROPIC_BASE_URL` | 自定义 API 端点，取自 `ClaudeCodeOptions.BaseUrl`。 |
+| `CLAUDE_CODE_ENTRYPOINT` | SDK 标识，始终为 `sdk-csharp`。 |
+
+## 通过环境变量提供鉴权
+
+<CodeGroup>
+
+```bash macOS/Linux
+export ANTHROPIC_AUTH_TOKEN="your-api-key"
+```
+
+```powershell Windows PowerShell
+$env:ANTHROPIC_AUTH_TOKEN="your-api-key"
+```
+
+```cmd Windows CMD
+set ANTHROPIC_AUTH_TOKEN=your-api-key
+```
+
+</CodeGroup>
+
+也可以直接通过选项传入：
+
+```csharp icon=code
+var options = new ClaudeCodeOptions { ApiKey = "your-api-key" };
+```
+
+## 传入额外的环境变量
+
+如果需要为 CLI 子进程注入额外变量（例如代理设置），使用 `EnvironmentVariables`：
+
+```csharp icon=code
+var options = new ClaudeCodeOptions
+{
+    EnvironmentVariables = new Dictionary<string, string?>
+    {
+        { "HTTP_PROXY", "http://proxy:1080" },
+        { "HTTPS_PROXY", "http://proxy:1080" }
+    }
+};
+```
+
+<Tip>
+  将某个键的值设置为 `null` 可以显式移除从宿主继承的环境变量。
+</Tip>
+
+## 自定义 API 端点
+
+如需连接自建或代理的 Anthropic 兼容端点，使用 `BaseUrl`：
+
+```csharp icon=code
+var options = new ClaudeCodeOptions
+{
+    ApiKey = "sk-ant-...",
+    BaseUrl = "https://your-proxy.example.com"
+};
+```
+
+<Warning>
+  `ANTHROPIC_AUTH_TOKEN` 是敏感凭据，请勿写入源代码或提交到版本控制。建议使用环境变量、密钥管理服务或 .NET 用户机密。
+</Warning>
